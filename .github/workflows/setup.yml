@@ -1,0 +1,391 @@
+name: Setup Python Project Template
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  Check_Init:
+    runs-on: ubuntu-latest
+    outputs:
+      script_already_ran: ${{ steps.check_state.outputs.script_already_ran }}
+    permissions:
+      contents: write
+
+    steps:    
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Chequear si el script ya se ejecutó
+        id: check_state
+        run: |
+          if [ -f ".github/initial_ran" ]; then
+            echo "script_already_ran=true" >> $GITHUB_OUTPUT
+          else
+            echo "script_already_ran=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validacion de estado de la Initialización
+        run: |
+          if [ "${{ steps.check_state.outputs.script_already_ran }}" == "true" ]; then
+            echo -e "Existe Archivo: \033[0;32m${{ steps.check_state.outputs.script_already_ran }}\033[0m - Listo Para Ejecutar: \033[0;31mfalse\033[0m."
+          else
+            echo -e "Existe Archivo: \033[0;31m${{ steps.check_state.outputs.script_already_ran }}\033[0m - Listo Para Ejecutar: \033[0;32mtrue\033[0m."
+          fi
+
+  Setear_GitFlow:
+    runs-on: ubuntu-latest
+    needs: Check_Init
+    if: needs.Check_Init.outputs.script_already_ran == 'false'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validacion branch Develop
+        id: check_develop_branch
+        run: |
+          if git ls-remote --heads origin | grep -q "refs/heads/develop"; then
+            echo "branch_exists=true" >> $GITHUB_ENV
+          else
+            echo "branch_exists=false" >> $GITHUB_ENV
+          fi
+
+      - name: Git config
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Creación de Git Flow
+        if: env.branch_exists == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install git-flow
+          git flow init -d
+      
+      - name: Resetear develop usando main
+        run: |
+          git fetch origin
+          # Verificar si la rama develop existe localmente
+          if git show-ref --verify --quiet refs/heads/develop; then
+            echo "La rama develop existe localmente."
+          else
+            echo "La rama develop no existe localmente."
+            git checkout -b develop origin/main
+          fi
+          # Verificar si la rama origin/develop existe remotamente
+          if git ls-remote --heads origin develop | grep -q "refs/heads/develop"; then
+            echo "La rama origin/develop existe remotamente."
+            git checkout develop
+            git reset --hard origin/main
+            git push --force origin develop
+          else
+            echo "La rama origin/develop no existe remotamente."
+            git push --set-upstream origin develop
+          fi
+
+  Creacion_de_Entorno:
+    runs-on: ubuntu-latest
+    needs: 
+      - Setear_GitFlow
+    permissions:
+      contents: write
+    if: needs.Check_Init.outputs.script_already_ran == 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Git config
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Crear Carpetas Base
+        run: |
+          mkdir -p dist src test config docs logs temp db
+          touch dist/.gitkeep config/.gitkeep docs/.gitkeep logs/.gitkeep temp/.gitkeep db/.gitkeep
+    
+      - name: Crear archivos base para Python y pruebas
+        run: |
+          echo "class ExampleClass:" > src/main.py
+          echo "    def __init__(self, value):" >> src/main.py
+          echo "        self.value = value" >> src/main.py
+          echo "" >> src/main.py
+
+          echo "    def get_value(self):" >> src/main.py
+          echo "        return self.value" >> src/main.py
+          echo "" >> src/main.py
+
+          echo "import pytest" > test/test_example.py
+          echo "from src.main import ExampleClass" >> test/test_example.py
+          echo "" >> test/test_example.py
+
+          echo "def test_example_class():" >> test/test_example.py
+          echo "    example = ExampleClass(42)" >> test/test_example.py
+          echo "    assert example.get_value() == 42" >> test/test_example.py
+
+      - name: Crear requirements.txt
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "Creando un archivo base requirements.txt."
+            echo "# Agrega tus dependencias aquí." > requirements.txt
+            echo "pytest" >> requirements.txt
+          else
+            echo "El archivo requirements.txt ya existe."
+            echo "pytest" >> requirements.txt
+          fi
+
+      - name: Escribir README.md
+        run: |
+          echo "# Template de Proyecto Python" > README.md
+          echo "" >> README.md
+          echo "Este es un proyecto de plantilla para desarrollos en Python." >> README.md
+          echo "" >> README.md
+          echo "## Estructura del Proyecto" >> README.md
+          echo "" >> README.md
+          echo "- **dist/**: Archivos distribuidos y empaquetados." >> README.md
+          echo "- **src/**: Código fuente del proyecto." >> README.md
+          echo "- **test/**: Pruebas unitarias y de integración." >> README.md
+          echo "- **docs/**: Documentación del proyecto." >> README.md
+          echo "- **config/**: Archivos de configuración del proyecto." >> README.md
+          echo "- **logs/**: Archivos de log." >> README.md
+          echo "- **temp/**: Archivos temporales." >> README.md
+          echo "- **db/**: Archivos de base de datos." >> README.md
+          echo "" >> README.md
+          echo "## Cómo Empezar" >> README.md
+          echo "" >> README.md
+          echo "1. Clona el repositorio." >> README.md
+          echo "2. Crea un entorno virtual: \`python -m venv .venv\`" >> README.md
+          echo "3. Activa el entorno virtual:" >> README.md
+          echo "   - En Windows: \`.venv\\Scripts\\activate\`" >> README.md
+          echo "   - En Unix o MacOS: \`source .venv/bin/activate\`" >> README.md
+          echo "4. Instala las dependencias: \`pip install -r requirements.txt\`" >> README.md
+          echo "" >> README.md
+          echo "## Contribuir" >> README.md
+          echo "" >> README.md
+          echo "Por favor, asegúrate de actualizar las pruebas según sea necesario y de seguir las mejores prácticas de codificación." >> README.md
+
+      - name: Realizar commit de los cambios
+        run: |
+          git fetch origin
+          git checkout develop || git checkout -b develop origin/main
+          git add requirements.txt README.md dist/ src/ config/ test/ docs/ logs/ temp/ db/
+          git commit -m "Agregar entorno virtual y dependencias a requirements.txt"
+          git push origin develop
+
+  Setear_GitIgnore:
+    runs-on: ubuntu-latest
+    needs: 
+      - Creacion_de_Entorno
+    permissions:
+      contents: write
+    if: needs.Check_Init.outputs.script_already_ran == 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Git config
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Creacion de Git Ignore
+        id: check_state
+        run: |
+          if [ -f ".gitignore" ]; then
+            echo "gitignore_exist=true" >> $GITHUB_OUTPUT
+            echo ".gitignore ya existe"
+          else
+            echo "gitignore_exist=false" >> $GITHUB_OUTPUT
+            touch .gitignore
+          fi
+
+      - name: Ingresar registros a de Git Ignore
+        run: |
+          echo "# Byte-compiled / optimized / DLL files" >> .gitignore
+          echo "__pycache__/" >> .gitignore
+          echo "*.py[cod]" >> .gitignore
+          echo "*$py.class" >> .gitignore
+          echo "" >> .gitignore
+          echo "# C extensions" >> .gitignore
+          echo "*.so" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Distribution / packaging" >> .gitignore
+          echo ".Python" >> .gitignore
+          echo "build/" >> .gitignore
+          echo "develop-eggs/" >> .gitignore
+          echo "#dist/" >> .gitignore
+          echo "downloads/" >> .gitignore
+          echo "eggs/" >> .gitignore
+          echo ".eggs/" >> .gitignore
+          echo "lib/" >> .gitignore
+          echo "lib64/" >> .gitignore
+          echo "parts/" >> .gitignore
+          echo "sdist/" >> .gitignore
+          echo "var/" >> .gitignore
+          echo "wheels/" >> .gitignore
+          echo "share/python-wheels/" >> .gitignore
+          echo "*.egg-info/" >> .gitignore
+          echo ".installed.cfg" >> .gitignore
+          echo "*.egg" >> .gitignore
+          echo "MANIFEST" >> .gitignore
+          echo "" >> .gitignore
+          echo "# PyInstaller" >> .gitignore
+          echo "#  Usually these files are written by a python script from a template" >> .gitignore
+          echo "#  before PyInstaller builds the exe, so as to inject date/other infos into it." >> .gitignore
+          echo "*.manifest" >> .gitignore
+          echo "*.spec" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Installer logs" >> .gitignore
+          echo "pip-log.txt" >> .gitignore
+          echo "pip-delete-this-directory.txt" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Unit test / coverage reports" >> .gitignore
+          echo "htmlcov/" >> .gitignore
+          echo ".tox/" >> .gitignore
+          echo ".nox/" >> .gitignore
+          echo ".coverage" >> .gitignore
+          echo ".coverage.*" >> .gitignore
+          echo ".cache" >> .gitignore
+          echo "nosetests.xml" >> .gitignore
+          echo "coverage.xml" >> .gitignore
+          echo "*.cover" >> .gitignore
+          echo "*.py,cover" >> .gitignore
+          echo ".hypothesis/" >> .gitignore
+          echo ".pytest_cache/" >> .gitignore
+          echo "cover/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Translations" >> .gitignore
+          echo "*.mo" >> .gitignore
+          echo "*.pot" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Django stuff:" >> .gitignore
+          echo "*.log" >> .gitignore
+          echo "#log/" >> .gitignore
+          echo "local_settings.py" >> .gitignore
+          echo "db.sqlite3" >> .gitignore
+          echo "db.sqlite3-journal" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Flask stuff:" >> .gitignore
+          echo "instance/" >> .gitignore
+          echo ".webassets-cache" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Scrapy stuff:" >> .gitignore
+          echo ".scrapy" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Sphinx documentation" >> .gitignore
+          echo "docs/_build/" >> .gitignore
+          echo "docs/_static/" >> .gitignore
+          echo "docs/_templates/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# PyBuilder" >> .gitignore
+          echo "target/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Jupyter Notebook" >> .gitignore
+          echo ".ipynb_checkpoints" >> .gitignore
+          echo "" >> .gitignore
+          echo "# IPython" >> .gitignore
+          echo "profile_default/" >> .gitignore
+          echo "ipython_config.py" >> .gitignore
+          echo "" >> .gitignore
+          echo "# pyenv" >> .gitignore
+          echo ".python-version" >> .gitignore
+          echo "" >> .gitignore
+          echo "# pipenv" >> .gitignore
+          echo "Pipfile.lock" >> .gitignore
+          echo "" >> .gitignore
+          echo "# PEP 582; used by e.g. github.com/David-OConnor/pyflow" >> .gitignore
+          echo "__pypackages__/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Celery stuff" >> .gitignore
+          echo "celerybeat-schedule" >> .gitignore
+          echo "celerybeat.pid" >> .gitignore
+          echo "" >> .gitignore
+          echo "# SageMath parsed files" >> .gitignore
+          echo "*.sage.py" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Environments" >> .gitignore
+          echo ".env" >> .gitignore
+          echo ".venv/" >> .gitignore
+          echo "env/" >> .gitignore
+          echo "venv/" >> .gitignore
+          echo "ENV/" >> .gitignore
+          echo "env.bak/" >> .gitignore
+          echo "venv.bak/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Spyder project settings" >> .gitignore
+          echo ".spyderproject" >> .gitignore
+          echo ".spyproject" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Rope project settings" >> .gitignore
+          echo ".ropeproject" >> .gitignore
+          echo "" >> .gitignore
+          echo "# mkdocs documentation" >> .gitignore
+          echo "/site" >> .gitignore
+          echo "" >> .gitignore
+          echo "# mypy" >> .gitignore
+          echo ".mypy_cache/" >> .gitignore
+          echo ".dmypy.json" >> .gitignore
+          echo "dmypy.json" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Pyre type checker" >> .gitignore
+          echo ".pyre/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# pytype static type analyzer" >> .gitignore
+          echo ".pytype/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Cython debug symbols" >> .gitignore
+          echo "cython_debug/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# VS Code" >> .gitignore
+          echo ".vscode/" >> .gitignore
+          echo "" >> .gitignore
+          echo "# Otros" >> .gitignore
+          echo "#logs/" >> .gitignore
+          echo "#temp/" >> .gitignore
+          echo "#db/" >> .gitignore
+          echo "#src/" >> .gitignore
+          echo "#test/" >> .gitignore
+          echo "#docs/" >> .gitignore
+          echo "" >> .gitignore
+
+      - name: Realizar commit de los cambios
+        run: |
+          git fetch origin
+          git checkout develop || git checkout -b develop origin/main
+          git add .gitignore
+          git commit -m "Actualizar .gitignore"
+          git push origin develop
+
+  Finalizar_Setup:
+    runs-on: ubuntu-latest
+    needs: 
+      - Check_Init
+      - Setear_GitFlow
+      - Setear_GitIgnore
+      - Creacion_de_Entorno
+    if: needs.Check_Init.outputs.script_already_ran == 'false'
+    permissions:
+      contents: write
+
+    steps:  
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Crear archivo de estado
+        if: needs.Check_Init.outputs.script_already_ran == 'false'
+        run: |
+          echo -e "Archivo de Estado Creado Previmente: \033[0;31m${{ needs.Check_Init.outputs.script_already_ran }}"
+          touch .github/initial_ran
+          echo -e "Archivo de Estado Creado Previmente: \033[0;32mtrue"
+
+      - name: Realizar commit de los cambios
+        uses: stefanzweifel/git-auto-commit-action@v5.0.1
+        with:
+          commit_message: Se aplico Setup al Projecto ${{ github.repository }} 🚀"
